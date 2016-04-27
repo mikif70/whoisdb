@@ -14,7 +14,7 @@ import (
 var (
 	filename = "ripe.db.inetnum"
 	filepath = "/usr/local/Backup"
-	mongodb  = "mongodb://mongo-1.mail.tiscali.sys:27018"
+	mongodb  = "mongodb://127.0.0.127018"
 )
 
 type Whois struct {
@@ -24,7 +24,7 @@ type Whois struct {
 	Netname string `json:"netname" bson:"netname"`
 	Country string `json:"country" bson:"country"`
 	Descr   string `json:"desc" bson:"desc"`
-	Mnt		string `json:"mnt" bson:"mnt"`
+	Mnt     string `json:"mnt" bson:"mnt"`
 }
 
 func main() {
@@ -35,6 +35,8 @@ func main() {
 	}
 	defer session.Close()
 	db := session.DB("whois").C("inetnum")
+	bulk := db.Bulk()
+	bulk.Unordered()
 
 	file, err := os.Open(filepath + "/" + filename)
 	if err != nil {
@@ -47,34 +49,42 @@ func main() {
 	scanner.Split(bufio.ScanLines)
 
 	var whois = &Whois{}
-	
+
+	count := 0
 	for scanner.Scan() {
+		count += 1
 		var line = strings.Split(scanner.Text(), ":")
-	
+
 		switch line[0] {
-			case "inetnum":			
-				whois.Inetnum = strings.TrimSpace(line[1])
-				var ips = strings.Split(line[1], "-");
-				whois.Start = strings.TrimSpace(ips[0])
-				whois.Stop = strings.TrimSpace(ips[1])
-			case "netname":
-				whois.Netname = strings.TrimSpace(line[1])
-			case "descr":
-				if whois.Descr == "" {
-					whois.Descr = strings.TrimSpace(line[1])
-				}			
-			case "country":
-				whois.Country = strings.TrimSpace(line[1])
-			case "mnt-by":
-				whois.Mnt = strings.TrimSpace(line[1])
-			default:
-				if strings.Contains(line[0], "%") {
-					if whois.Inetnum != "" {
-						fmt.Println(whois)
-						db.Insert(whois)
-						whois = &Whois{}					
-					}
+		case "inetnum":
+			whois.Inetnum = strings.TrimSpace(line[1])
+			var ips = strings.Split(line[1], "-")
+			whois.Start = strings.TrimSpace(ips[0])
+			whois.Stop = strings.TrimSpace(ips[1])
+		case "netname":
+			whois.Netname = strings.TrimSpace(line[1])
+		case "descr":
+			if whois.Descr == "" {
+				whois.Descr = strings.TrimSpace(line[1])
+			}
+		case "country":
+			whois.Country = strings.TrimSpace(line[1])
+		case "mnt-by":
+			whois.Mnt = strings.TrimSpace(line[1])
+		default:
+			if strings.Contains(line[0], "%") {
+				if whois.Inetnum != "" {
+					fmt.Println(whois)
+					bulk.Insert(whois)
+					whois = &Whois{}
 				}
-		}			
+			}
+		}
+		if count >= 1000 {
+			_, err := bulk.Run()
+			if err != nil {
+				fmt.Println("Insert error: ", err)
+			}
+		}
 	}
 }
