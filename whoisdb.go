@@ -35,8 +35,6 @@ func main() {
 	}
 	defer session.Close()
 	db := session.DB("whois").C("inetnum")
-	bulk := db.Bulk()
-	bulk.Unordered()
 
 	file, err := os.Open(filepath + "/" + filename)
 	if err != nil {
@@ -75,15 +73,9 @@ func main() {
 			if strings.Contains(line[0], "%") {
 				if whois.Inetnum != "" {
 					fmt.Println(whois)
-					bulk.Insert(whois)
+					db.Insert(whois)
 					whois = &Whois{}
 				}
-			}
-		}
-		if count >= 1000 {
-			_, err := bulk.Run()
-			if err != nil {
-				fmt.Println("Insert error: ", err)
 			}
 		}
 	}
